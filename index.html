@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Karaoke Cost Calculator</title>
+  <!-- Ensure proper scaling on mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Tunnel Cost Calculator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Google Font for modern look -->
@@ -39,7 +41,7 @@
       border: 1px solid #ddd;
       border-radius: 4px;
       margin-bottom: 10px;
-      font-size: 14px;
+      font-size: 16px;
     }
     button {
       background: #007bff;
@@ -48,7 +50,7 @@
       padding: 10px 20px;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 16px;
       margin: 10px 0;
     }
     button:hover {
@@ -68,14 +70,14 @@
       right: -10px;
       background: #f44336;
       color: #fff;
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       display: flex;
       justify-content: center;
       align-items: center;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: bold;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
@@ -83,7 +85,7 @@
       background: #d32f2f;
     }
     .breakdown {
-      font-size: 0.9em;
+      font-size: 14px;
       margin-left: 20px;
     }
     hr {
@@ -95,23 +97,52 @@
       background: #e9ecef;
       padding: 15px;
       border-radius: 4px;
+      font-size: 16px;
     }
     #resultHeader {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
     }
     #copyResultsBtn {
       background: #28a745;
       border: none;
       color: #fff;
-      padding: 6px 12px;
+      padding: 8px 14px;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 16px;
+      margin-top: 10px;
     }
     #copyResultsBtn:hover {
       background: #218838;
+    }
+    /* Mobile-specific adjustments */
+    @media (max-width: 600px) {
+      body {
+        font-size: 18px;
+        /* Center the container vertically and horizontally */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .container {
+        width: 100%;
+        padding: 20px;
+        margin: 10px;
+      }
+      input, button {
+        font-size: 18px;
+      }
+      .breakdown {
+        font-size: 16px;
+      }
+      .summary {
+        font-size: 18px;
+      }
     }
   </style>
 </head>
@@ -163,7 +194,7 @@
       return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     }
     
-    // Returns the group hourly rate based on active group size and current absolute time (in minutes from midnight).
+    // Returns the group hourly rate based on active group size and current time (in minutes from midnight).
     function getHourlyRate(activeCount, currentTime) {
       const sevenPM = 19 * 60;
       const isEvening = currentTime >= sevenPM;
@@ -285,6 +316,8 @@
       }
       
       let computedSessionTotal = 0;
+      let textResult = "Results:\n\n";
+      
       for (let minute = 0; minute < duration; minute++) {
         const currentTime = sessionStartMinutes + minute;
         const activeParticipants = participants.filter(p => p.joinOffset <= minute && minute < p.leaveOffset);
@@ -335,9 +368,8 @@
         p.adjustedCost = p.computedCost * factor;
       });
       
-      // Build HTML result output.
       let html = '<ul>';
-      let textResult = "Results:\n\n";
+      textResult += "Participant Costs:\n";
       participants.forEach(p => {
         html += `<li><strong>${p.name}</strong>:<br>
                  Computed Cost: $${p.computedCost.toFixed(2)}<br>
@@ -345,7 +377,6 @@
                  <em>Breakdown:</em><ul class="breakdown">`;
         
         textResult += `${p.name}:\n  Computed Cost: $${p.computedCost.toFixed(2)}\n  Adjusted Cost: $${p.adjustedCost.toFixed(2)}\n  Breakdown:\n`;
-        
         p.breakdown.forEach(interval => {
           const intervalStart = formatTime(sessionStartMinutes + interval.startMinute);
           const intervalEnd = formatTime(sessionStartMinutes + interval.endMinute);
@@ -373,18 +404,13 @@
                  </ul>
                </div>`;
       
-      textResult += `Summary:\n`;
-      textResult += `  Computed Session Total: $${computedSessionTotal.toFixed(2)}\n`;
-      textResult += `  Actual Total Paid: ${!isNaN(actualPaid) && actualPaid > 0 ? '$' + actualPaid.toFixed(2) : 'Not provided (using computed total)'}\n`;
-      textResult += `  Adjustment Factor: ${factor.toFixed(4)}\n`;
-      textResult += `  Sum of Adjusted Participant Costs: $${participants.reduce((s, p) => s + p.adjustedCost, 0).toFixed(2)}\n`;
+      textResult += `Summary:\n  Computed Session Total: $${computedSessionTotal.toFixed(2)}\n  Actual Total Paid: ${!isNaN(actualPaid) && actualPaid > 0 ? '$' + actualPaid.toFixed(2) : 'Not provided (using computed total)'}\n  Adjustment Factor: ${factor.toFixed(4)}\n  Sum of Adjusted Participant Costs: $${participants.reduce((s, p) => s + p.adjustedCost, 0).toFixed(2)}\n`;
       
       resultsDiv.innerHTML = html;
-      // Store the formatted text result globally.
       lastTextResult = textResult;
     }
     
-    // Copies the formatted result text (with indents) to clipboard.
+    // Copies the formatted result text to the clipboard.
     function copyResults() {
       if (!lastTextResult) {
         alert("No results available to copy. Please calculate the results first.");
