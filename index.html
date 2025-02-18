@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Karaoke Cost Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Google Font for modern look -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: #f5f5f5;
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      padding: 20px 30px;
+    }
+    h1, h2, h3 {
+      color: #333;
+      margin-top: 0;
+    }
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      font-weight: 500;
+    }
+    input[type="time"],
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    button {
+      background: #007bff;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 10px 0;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .participant {
+      position: relative;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .remove-btn {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      background: #f44336;
+      color: #fff;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .remove-btn:hover {
+      background: #d32f2f;
+    }
+    .breakdown {
+      font-size: 0.9em;
+      margin-left: 20px;
+    }
+    hr {
+      margin: 20px 0;
+      border: 0;
+      border-top: 1px solid #eee;
+    }
+    .summary {
+      background: #e9ecef;
+      padding: 15px;
+      border-radius: 4px;
+    }
+    #resultHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #copyResultsBtn {
+      background: #28a745;
+      border: none;
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #copyResultsBtn:hover {
+      background: #218838;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Music Tunnel Cost Calculator</h1>
+    
+    <!-- Session Parameters -->
+    <div>
+      <label for="startTime">Session Start Time (e.g., 14:00):</label>
+      <input type="time" id="startTime" value="14:00">
+      
+      <label for="endTime">Session End Time (e.g., 19:00):</label>
+      <input type="time" id="endTime" value="19:00">
+      
+      <label for="actualPaid">Actual Total Paid ($):</label>
+      <input type="number" id="actualPaid" placeholder="e.g., 100.00" step="0.01">
+    </div>
+    
+    <h2>Participants</h2>
+    <p>Enter each participant’s join and leave time below.</p>
+    <div id="participants"></div>
+    <button onclick="addParticipant()">Add Participant</button>
+    
+    <br>
+    <button onclick="calculateCosts()">Calculate Costs</button>
+    
+    <div id="resultHeader">
+      <h2>Results</h2>
+      <button id="copyResultsBtn" onclick="copyResults()">Copy Results</button>
+    </div>
+    <div id="results"></div>
+  </div>
+  
+  <script>
+    // Utility functions
+    function pad(num) {
+      return num.toString().padStart(2, '0');
+    }
+    
+    function formatTime(totalMinutes) {
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return `${pad(hours)}:${pad(minutes)}`;
+    }
+    
+    function getCurrentLocalTime() {
+      const now = new Date();
+      return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    }
+    
+    // Returns the group hourly rate based on active group size and current absolute time (in minutes from midnight).
+    function getHourlyRate(activeCount, currentTime) {
+      const sevenPM = 19 * 60;
+      const isEvening = currentTime >= sevenPM;
+      if (activeCount >= 1 && activeCount <= 3) {
+        return isEvening ? 39 : 29;
+      } else if (activeCount <= 5) {
+        return isEvening ? 59 : 49;
+      } else if (activeCount <= 8) {
+        return isEvening ? 79 : 69;
+      } else if (activeCount <= 10) {
+        return isEvening ? 99 : 89;
+      } else if (activeCount <= 15) {
+        return isEvening ? 129 : 109;
+      } else if (activeCount <= 20) {
+        return isEvening ? 139 : 129;
+      } else {
+        return isEvening ? 139 : 129;
+      }
+    }
+    
+    // Adds a new participant block with a round remove icon.
+    function addParticipant() {
+      const container = document.getElementById('participants');
+      const div = document.createElement('div');
+      div.className = 'participant';
+      
+      // Create and append the remove button.
+      const removeBtn = document.createElement('div');
+      removeBtn.className = 'remove-btn';
+      removeBtn.title = "Remove this participant";
+      removeBtn.innerHTML = '&times;';
+      removeBtn.addEventListener('click', () => div.remove());
+      div.appendChild(removeBtn);
+      
+      // Create a container for participant fields.
+      const contentDiv = document.createElement('div');
+      const startTimeStr = document.getElementById('startTime').value;
+      const endTimeStr = document.getElementById('endTime').value;
+      const nowStr = getCurrentLocalTime();
+      
+      let suggestedJoin = nowStr;
+      if (startTimeStr) {
+        const [startHour, startMinute] = startTimeStr.split(':').map(Number);
+        const startTimeMinutes = startHour * 60 + startMinute;
+        const [nowHour, nowMinute] = nowStr.split(':').map(Number);
+        const nowMinutes = nowHour * 60 + nowMinute;
+        if (nowMinutes < startTimeMinutes) {
+          suggestedJoin = startTimeStr;
+        }
+      }
+      const suggestedLeave = endTimeStr || nowStr;
+      
+      contentDiv.innerHTML = `
+        <label>Name: <input type="text" class="participantName" placeholder="Name"></label>
+        <label>Join Time: <input type="time" class="joinTime" value="${suggestedJoin}"></label>
+        <label>Leave Time: <input type="time" class="leaveTime" value="${suggestedLeave}"></label>
+      `;
+      div.appendChild(contentDiv);
+      container.appendChild(div);
+    }
+    
+    // Global variable to store the formatted text version of the results.
+    let lastTextResult = "";
+    
+    // Main calculation function.
+    function calculateCosts() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+      
+      const startTimeStr = document.getElementById('startTime').value;
+      const endTimeStr = document.getElementById('endTime').value;
+      const actualPaidStr = document.getElementById('actualPaid').value;
+      const actualPaid = parseFloat(actualPaidStr);
+      
+      if (!startTimeStr || !endTimeStr) {
+        resultsDiv.innerText = 'Please enter both a valid start time and end time.';
+        return;
+      }
+      
+      const [startHour, startMinute] = startTimeStr.split(':').map(Number);
+      const [endHour, endMinute] = endTimeStr.split(':').map(Number);
+      const sessionStartMinutes = startHour * 60 + startMinute;
+      const sessionEndMinutes = endHour * 60 + endMinute;
+      
+      const duration = sessionEndMinutes - sessionStartMinutes;
+      if (duration <= 0) {
+        resultsDiv.innerText = 'End time must be after the start time.';
+        return;
+      }
+      
+      // Gather participant data.
+      const participantElems = document.querySelectorAll('.participant');
+      const participants = [];
+      participantElems.forEach(elem => {
+        const name = elem.querySelector('.participantName').value.trim() || 'Unnamed';
+        const joinTimeStr = elem.querySelector('.joinTime').value;
+        const leaveTimeStr = elem.querySelector('.leaveTime').value;
+        if (!joinTimeStr || !leaveTimeStr) return;
+        
+        const [joinHour, joinMinute] = joinTimeStr.split(':').map(Number);
+        const [leaveHour, leaveMinute] = leaveTimeStr.split(':').map(Number);
+        const joinTimeMinutes = joinHour * 60 + joinMinute;
+        const leaveTimeMinutes = leaveHour * 60 + leaveMinute;
+        
+        const joinOffset = joinTimeMinutes - sessionStartMinutes;
+        const leaveOffset = leaveTimeMinutes - sessionStartMinutes;
+        
+        if (joinOffset < 0 || joinOffset >= duration || leaveOffset <= joinOffset || leaveOffset > duration) {
+          console.warn(`${name}'s join/leave times are invalid or outside the session and will be skipped.`);
+          return;
+        }
+        
+        participants.push({ name, joinOffset, leaveOffset, computedCost: 0, breakdown: [] });
+      });
+      
+      if (participants.length === 0) {
+        resultsDiv.innerText = 'Please add at least one valid participant.';
+        return;
+      }
+      
+      let computedSessionTotal = 0;
+      for (let minute = 0; minute < duration; minute++) {
+        const currentTime = sessionStartMinutes + minute;
+        const activeParticipants = participants.filter(p => p.joinOffset <= minute && minute < p.leaveOffset);
+        const activeCount = activeParticipants.length;
+        if (activeCount === 0) continue;
+        
+        const groupHourlyRate = getHourlyRate(activeCount, currentTime);
+        const costForThisMinute = groupHourlyRate / 60;
+        computedSessionTotal += costForThisMinute;
+        
+        const costPerPerson = costForThisMinute / activeCount;
+        activeParticipants.forEach(p => {
+          p.computedCost += costPerPerson;
+          if (p.breakdown.length > 0) {
+            let last = p.breakdown[p.breakdown.length - 1];
+            if (last.effectiveRate === costPerPerson && last.endMinute === minute) {
+              last.endMinute = minute + 1;
+              last.cost += costPerPerson;
+            } else {
+              p.breakdown.push({
+                startMinute: minute,
+                endMinute: minute + 1,
+                effectiveRate: costPerPerson,
+                cost: costPerPerson,
+                groupHourlyRate: groupHourlyRate,
+                activeCount: activeCount
+              });
+            }
+          } else {
+            p.breakdown.push({
+              startMinute: minute,
+              endMinute: minute + 1,
+              effectiveRate: costPerPerson,
+              cost: costPerPerson,
+              groupHourlyRate: groupHourlyRate,
+              activeCount: activeCount
+            });
+          }
+        });
+      }
+      
+      let factor = 1;
+      if (!isNaN(actualPaid) && actualPaid > 0) {
+        factor = actualPaid / computedSessionTotal;
+      }
+      
+      participants.forEach(p => {
+        p.adjustedCost = p.computedCost * factor;
+      });
+      
+      // Build HTML result output.
+      let html = '<ul>';
+      let textResult = "Results:\n\n";
+      participants.forEach(p => {
+        html += `<li><strong>${p.name}</strong>:<br>
+                 Computed Cost: $${p.computedCost.toFixed(2)}<br>
+                 <strong>Adjusted Cost:</strong> $${p.adjustedCost.toFixed(2)}<br>
+                 <em>Breakdown:</em><ul class="breakdown">`;
+        
+        textResult += `${p.name}:\n  Computed Cost: $${p.computedCost.toFixed(2)}\n  Adjusted Cost: $${p.adjustedCost.toFixed(2)}\n  Breakdown:\n`;
+        
+        p.breakdown.forEach(interval => {
+          const intervalStart = formatTime(sessionStartMinutes + interval.startMinute);
+          const intervalEnd = formatTime(sessionStartMinutes + interval.endMinute);
+          const minutesSpent = interval.endMinute - interval.startMinute;
+          html += `<li>From ${intervalStart} to ${intervalEnd} (${minutesSpent} minute${minutesSpent > 1 ? 's' : ''})<br>
+                   Group rate: $${interval.groupHourlyRate}/hr with ${interval.activeCount} active<br>
+                   Each paid $${interval.effectiveRate.toFixed(4)}/min → $${interval.cost.toFixed(2)}</li>`;
+          textResult += `    From ${intervalStart} to ${intervalEnd} (${minutesSpent} minute${minutesSpent > 1 ? 's' : ''})\n`;
+          textResult += `      Group rate: $${interval.groupHourlyRate}/hr with ${interval.activeCount} active\n`;
+          textResult += `      Each paid $${interval.effectiveRate.toFixed(4)}/min -> $${interval.cost.toFixed(2)}\n`;
+        });
+        html += '</ul></li>';
+        textResult += '\n';
+      });
+      html += '</ul>';
+      
+      html += `<hr>
+               <h3>Summary</h3>
+               <div class="summary">
+                 <ul>
+                   <li>Computed Session Total: $${computedSessionTotal.toFixed(2)}</li>
+                   <li>Actual Total Paid: ${!isNaN(actualPaid) && actualPaid > 0 ? '$' + actualPaid.toFixed(2) : 'Not provided (using computed total)'}</li>
+                   <li>Adjustment Factor: ${factor.toFixed(4)}</li>
+                   <li>Sum of Adjusted Participant Costs: $${participants.reduce((s, p) => s + p.adjustedCost, 0).toFixed(2)}</li>
+                 </ul>
+               </div>`;
+      
+      textResult += `Summary:\n`;
+      textResult += `  Computed Session Total: $${computedSessionTotal.toFixed(2)}\n`;
+      textResult += `  Actual Total Paid: ${!isNaN(actualPaid) && actualPaid > 0 ? '$' + actualPaid.toFixed(2) : 'Not provided (using computed total)'}\n`;
+      textResult += `  Adjustment Factor: ${factor.toFixed(4)}\n`;
+      textResult += `  Sum of Adjusted Participant Costs: $${participants.reduce((s, p) => s + p.adjustedCost, 0).toFixed(2)}\n`;
+      
+      resultsDiv.innerHTML = html;
+      // Store the formatted text result globally.
+      lastTextResult = textResult;
+    }
+    
+    // Copies the formatted result text (with indents) to clipboard.
+    function copyResults() {
+      if (!lastTextResult) {
+        alert("No results available to copy. Please calculate the results first.");
+        return;
+      }
+      navigator.clipboard.writeText(lastTextResult).then(() => {
+        alert("Formatted results copied to clipboard!");
+      }).catch(err => {
+        alert("Failed to copy results: " + err);
+      });
+    }
+  </script>
+</body>
+</html>
