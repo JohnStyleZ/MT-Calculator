@@ -5,16 +5,26 @@
   <!-- Ensure proper scaling on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Music Tunnel Cost Calculator</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Google Font for modern look -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Font Awesome CDN for icons (integrity attribute removed) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
   <style>
+    /* Global button style for consistent sizing */
+    button {
+      box-sizing: border-box;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      min-width: 120px;
+      margin: 10px 0;
+      border: none;
+      outline: none;
+    }
     body {
       background: #f5f5f5;
       font-family: 'Roboto', sans-serif;
       margin: 0;
-      padding: 0;
+      padding: 20px;
     }
     /* Fixed container centered in the viewport */
     .container {
@@ -49,16 +59,6 @@
       border-radius: 4px;
       margin-bottom: 10px;
       font-size: 16px;
-    }
-    button {
-      background: #007bff;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 16px;
-      margin: 10px 0;
     }
     button:hover {
       background: #0056b3;
@@ -106,24 +106,52 @@
       border-radius: 4px;
       font-size: 16px;
     }
+    /* Results Header */
     #resultHeader {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
+      margin-bottom: 10px;
     }
-    #copyResultsBtn, #clearDataBtn {
+    /* Inline Copy Results Button (aligned right) */
+    #copyResultsInline {
       background: #28a745;
-      border: none;
       color: #fff;
-      padding: 8px 14px;
+    }
+    #copyResultsInline:hover {
+      background: #218838;
+    }
+    /* Floating Copy Results Button, initially hidden */
+    #copyResultsFloating {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10;
+      background: #28a745;
+      color: #fff;
+      padding: 10px 20px;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
-      margin-top: 10px;
+      min-width: 120px;
+      display: none;
     }
-    #copyResultsBtn:hover, #clearDataBtn:hover {
+    #copyResultsFloating:hover {
       background: #218838;
+    }
+    /* Participant Actions container */
+    #participantActions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    /* Clear Data Button styled in red */
+    #clearDataBtn {
+      background: #dc3545;
+      color: #fff;
+    }
+    #clearDataBtn:hover {
+      background: #c82333;
     }
     a.spare-link {
       color: #007bff;
@@ -133,7 +161,6 @@
     a.spare-link:hover {
       text-decoration: underline;
     }
-    /* Mobile-specific adjustments (optional, since container is fixed) */
     @media (max-width: 600px) {
       body {
         font-size: 18px;
@@ -147,6 +174,18 @@
       .summary {
         font-size: 18px;
       }
+    }
+    .notification {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 4px;
+      z-index: 1000;
+      font-size: 16px;
     }
   </style>
 </head>
@@ -167,18 +206,23 @@
       <a class="spare-link" href="?new=1">Spare NFC Link</a>
     </p>
     <div id="participants"></div>
-    <button onclick="addParticipant()">Add Participant</button>
-    <button id="clearDataBtn" onclick="clearData()">Clear Data</button>
+    <div id="participantActions">
+      <button onclick="addParticipant()"><i class="fas fa-plus"></i> Add Participant</button>
+      <button id="clearDataBtn" onclick="clearData()"><i class="fas fa-trash"></i> Clear Data</button>
+    </div>
     
     <br>
-    <button onclick="calculateCosts()">Calculate Costs</button>
+    <button onclick="calculateCosts()"><i class="fas fa-calculator"></i> Calculate Costs</button>
     
     <div id="resultHeader">
-      <h2>Results</h2>
-      <button id="copyResultsBtn" onclick="copyResults()">Copy Results</button>
+      <h2 style="margin: 0;">Results</h2>
+      <button id="copyResultsInline" onclick="copyResults()"><i class="fas fa-copy"></i> Copy Results</button>
     </div>
     <div id="results"></div>
   </div>
+  
+  <!-- Floating copy button -->
+  <button id="copyResultsFloating" onclick="copyResults()"><i class="fas fa-copy"></i> Copy Results</button>
   
   <script>
     // --- Utility Functions ---
@@ -186,13 +230,11 @@
       return num.toString().padStart(2, '0');
     }
     
-    // Converts a time string (HH:MM) to minutes since midnight.
     function timeToMinutes(timeStr) {
       const parts = timeStr.split(':');
       return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
     }
     
-    // Formats minutes as HH:MM.
     function formatTime(totalMinutes) {
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
@@ -202,6 +244,17 @@
     function getCurrentLocalTime() {
       const now = new Date();
       return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    }
+    
+    // --- Notification Function ---
+    function showNotification(message) {
+      const notif = document.createElement('div');
+      notif.className = 'notification';
+      notif.textContent = message;
+      document.body.appendChild(notif);
+      setTimeout(() => {
+        notif.remove();
+      }, 3000); // 3 seconds
     }
     
     // --- Global Cost Function ---
@@ -255,13 +308,11 @@
     }
     
     // --- Participant Block ---
-    // If participantData is provided, use its values; otherwise, use defaults.
     function addParticipant(participantData) {
       const container = document.getElementById('participants');
       const div = document.createElement('div');
       div.className = 'participant';
       
-      // Create and append the remove button.
       const removeBtn = document.createElement('div');
       removeBtn.className = 'remove-btn';
       removeBtn.title = "Remove this participant";
@@ -273,7 +324,6 @@
       div.appendChild(removeBtn);
       
       const contentDiv = document.createElement('div');
-      // For new participant default join time is current time.
       let suggestedJoin = getCurrentLocalTime();
       let suggestedLeave = "";
       
@@ -297,17 +347,14 @@
     }
     
     // --- Calculation and Copy Functions ---
-    // Global variable to store the minimal formatted result text (only name and adjusted cost).
     let lastTextResult = "";
     
-    // Calculate costs by computing the session period from the earliest join to the latest leave.
     function calculateCosts() {
       const resultsDiv = document.getElementById('results');
       resultsDiv.innerHTML = '';
       
       const actualPaid = parseFloat(document.getElementById('actualPaid').value);
       
-      // Gather participant data.
       const participantElems = document.querySelectorAll('.participant');
       const participants = [];
       const joinTimes = [];
@@ -336,7 +383,6 @@
       }
       
       let computedSessionTotal = 0;
-      // Simulate minute-by-minute over the computed session.
       for (let minute = 0; minute < duration; minute++) {
         const currentTime = sessionStartMinutes + minute;
         const activeParticipants = participants.filter(p => {
@@ -353,7 +399,6 @@
         
         activeParticipants.forEach(p => {
           p.computedCost += costPerPerson;
-          // Group consecutive minutes with the same effective per-minute cost.
           if (p.breakdown.length > 0) {
             let last = p.breakdown[p.breakdown.length - 1];
             if (last.effectiveRate === costPerPerson && last.endMinute === minute) {
@@ -391,7 +436,6 @@
         p.adjustedCost = p.computedCost * factor;
       });
       
-      // Build detailed HTML result output (showing full breakdown).
       let html = '<ul>';
       participants.forEach(p => {
         html += `<li><strong>${p.name}</strong>:<br>
@@ -423,7 +467,9 @@
       
       resultsDiv.innerHTML = html;
       
-      // Build minimal text result (only name and adjusted cost) for copying.
+      // Auto-scroll so that the element with id "resultHeader" is at the top.
+      document.getElementById("resultHeader").scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
       let copyTextResult = "Participant Costs:\n\n";
       participants.forEach(p => {
         copyTextResult += `${p.name}: $${p.adjustedCost.toFixed(2)}\n`;
@@ -433,7 +479,6 @@
       saveParticipants();
     }
     
-    // Copies the minimal formatted result text to the clipboard.
     function copyResults() {
       if (!lastTextResult) {
         alert("No results available to copy. Please calculate the results first.");
@@ -447,10 +492,6 @@
     }
     
     // --- NFC Tag Integration via URL Query Parameter ---
-    // If the URL contains a "name" parameter (e.g. ?name=Alice), then:
-    // - If a participant with that name exists, update their leave time to the current time.
-    // - Otherwise, add a new participant with that name and set the join time to current time.
-    // If the URL contains "new" (and no "name"), prompt for a name.
     function processNfcScan() {
       const params = new URLSearchParams(window.location.search);
       let scannedName = params.get("name");
@@ -464,20 +505,19 @@
         participantElems.forEach(elem => {
           const nameInput = elem.querySelector('.participantName');
           if (nameInput && nameInput.value.trim().toLowerCase() === scannedName.trim().toLowerCase()) {
-            // Update leave time if current time is later.
             const leaveInput = elem.querySelector('.leaveTime');
             if (!leaveInput.value || leaveInput.value < currentTime) {
               leaveInput.value = currentTime;
-              alert(`Logged leave time for ${scannedName} at ${currentTime}`);
+              showNotification(`Logged leave time for ${scannedName} at ${currentTime}`);
             } else {
-              alert(`Participant ${scannedName} already has a leave time set.`);
+              showNotification(`Participant ${scannedName} already has a leave time set.`);
             }
             found = true;
           }
         });
         if (!found) {
           addParticipant({ name: scannedName, joinTime: getCurrentLocalTime(), leaveTime: "" });
-          alert(`Logged join time for ${scannedName} at ${getCurrentLocalTime()}`);
+          showNotification(`Logged join time for ${scannedName} at ${getCurrentLocalTime()}`);
         }
         saveParticipants();
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -490,13 +530,27 @@
         localStorage.removeItem("participants");
         document.getElementById('participants').innerHTML = "";
         document.getElementById('results').innerHTML = "";
-        alert("All data cleared!");
+        showNotification("All data cleared!");
       }
     }
     
     window.addEventListener('load', () => {
       loadParticipants();
       processNfcScan();
+      
+      // Scroll event listener to toggle the floating copy button
+      const container = document.querySelector('.container');
+      const resultHeader = document.getElementById('resultHeader');
+      const floatingCopy = document.getElementById('copyResultsFloating');
+      
+      container.addEventListener('scroll', () => {
+        // Show floating copy button only if the bottom of resultHeader is above the container's scrollTop
+        if (container.scrollTop > (resultHeader.offsetTop + resultHeader.offsetHeight)) {
+          floatingCopy.style.display = 'block';
+        } else {
+          floatingCopy.style.display = 'none';
+        }
+      });
     });
   </script>
 </body>
