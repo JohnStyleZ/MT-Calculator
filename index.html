@@ -14,11 +14,18 @@
       background: #f5f5f5;
       font-family: 'Roboto', sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
     }
+    /* Fixed container centered in the viewport */
     .container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90vw;
       max-width: 800px;
-      margin: 0 auto;
+      max-height: 90vh;
+      overflow-y: auto;
       background: #fff;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
@@ -105,7 +112,7 @@
       justify-content: space-between;
       flex-wrap: wrap;
     }
-    #copyResultsBtn {
+    #copyResultsBtn, #clearDataBtn {
       background: #28a745;
       border: none;
       color: #fff;
@@ -115,24 +122,21 @@
       font-size: 16px;
       margin-top: 10px;
     }
-    #copyResultsBtn:hover {
+    #copyResultsBtn:hover, #clearDataBtn:hover {
       background: #218838;
     }
-    /* Mobile-specific adjustments */
+    a.spare-link {
+      color: #007bff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    a.spare-link:hover {
+      text-decoration: underline;
+    }
+    /* Mobile-specific adjustments (optional, since container is fixed) */
     @media (max-width: 600px) {
       body {
         font-size: 18px;
-        /* Center the container vertically and horizontally */
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-      }
-      .container {
-        width: 100%;
-        padding: 20px;
-        margin: 10px;
       }
       input, button {
         font-size: 18px;
@@ -150,22 +154,21 @@
   <div class="container">
     <h1>Music Tunnel Cost Calculator</h1>
     
-    <!-- Session Parameters -->
+    <!-- Only asking for Actual Total Paid -->
     <div>
-      <label for="startTime">Session Start Time (e.g., 14:00):</label>
-      <input type="time" id="startTime" value="14:00">
-      
-      <label for="endTime">Session End Time (e.g., 19:00):</label>
-      <input type="time" id="endTime" value="19:00">
-      
       <label for="actualPaid">Actual Total Paid ($):</label>
       <input type="number" id="actualPaid" placeholder="e.g., 100.00" step="0.01">
     </div>
     
     <h2>Participants</h2>
-    <p>Enter each participant’s join and leave time below.</p>
+    <p>
+      Enter each participant’s join and leave time below (or scan an NFC tag with a URL like <code>?name=Alice</code>).<br>
+      For spare/new/random people, use this link:
+      <a class="spare-link" href="?new=1">Spare NFC Link</a>
+    </p>
     <div id="participants"></div>
     <button onclick="addParticipant()">Add Participant</button>
+    <button id="clearDataBtn" onclick="clearData()">Clear Data</button>
     
     <br>
     <button onclick="calculateCosts()">Calculate Costs</button>
@@ -178,11 +181,18 @@
   </div>
   
   <script>
-    // Utility functions
+    // --- Utility Functions ---
     function pad(num) {
       return num.toString().padStart(2, '0');
     }
     
+    // Converts a time string (HH:MM) to minutes since midnight.
+    function timeToMinutes(timeStr) {
+      const parts = timeStr.split(':');
+      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    }
+    
+    // Formats minutes as HH:MM.
     function formatTime(totalMinutes) {
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
@@ -194,7 +204,7 @@
       return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     }
     
-    // Returns the group hourly rate based on active group size and current time (in minutes from midnight).
+    // --- Global Cost Function ---
     function getHourlyRate(activeCount, currentTime) {
       const sevenPM = 19 * 60;
       const isEvening = currentTime >= sevenPM;
@@ -215,8 +225,38 @@
       }
     }
     
-    // Adds a new participant block with a round remove icon.
-    function addParticipant() {
+    // --- Persistence Functions ---
+    function saveParticipants() {
+      const participants = [];
+      const participantElems = document.querySelectorAll('.participant');
+      participantElems.forEach(elem => {
+        const name = elem.querySelector('.participantName').value;
+        const joinTime = elem.querySelector('.joinTime').value;
+        const leaveTime = elem.querySelector('.leaveTime').value;
+        if (name || joinTime || leaveTime) {
+          participants.push({ name, joinTime, leaveTime });
+        }
+      });
+      localStorage.setItem("participants", JSON.stringify(participants));
+    }
+    
+    function loadParticipants() {
+      const saved = localStorage.getItem("participants");
+      if (saved) {
+        try {
+          const participants = JSON.parse(saved);
+          participants.forEach(p => {
+            addParticipant(p);
+          });
+        } catch (e) {
+          console.error("Error parsing participant data", e);
+        }
+      }
+    }
+    
+    // --- Participant Block ---
+    // If participantData is provided, use its values; otherwise, use defaults.
+    function addParticipant(participantData) {
       const container = document.getElementById('participants');
       const div = document.createElement('div');
       div.className = 'participant';
@@ -226,88 +266,60 @@
       removeBtn.className = 'remove-btn';
       removeBtn.title = "Remove this participant";
       removeBtn.innerHTML = '&times;';
-      removeBtn.addEventListener('click', () => div.remove());
+      removeBtn.addEventListener('click', () => {
+        div.remove();
+        saveParticipants();
+      });
       div.appendChild(removeBtn);
       
-      // Create a container for participant fields.
       const contentDiv = document.createElement('div');
-      const startTimeStr = document.getElementById('startTime').value;
-      const endTimeStr = document.getElementById('endTime').value;
-      const nowStr = getCurrentLocalTime();
+      // For new participant default join time is current time.
+      let suggestedJoin = getCurrentLocalTime();
+      let suggestedLeave = "";
       
-      let suggestedJoin = nowStr;
-      if (startTimeStr) {
-        const [startHour, startMinute] = startTimeStr.split(':').map(Number);
-        const startTimeMinutes = startHour * 60 + startMinute;
-        const [nowHour, nowMinute] = nowStr.split(':').map(Number);
-        const nowMinutes = nowHour * 60 + nowMinute;
-        if (nowMinutes < startTimeMinutes) {
-          suggestedJoin = startTimeStr;
-        }
-      }
-      const suggestedLeave = endTimeStr || nowStr;
+      const nameVal = participantData ? participantData.name : "";
+      const joinVal = participantData ? participantData.joinTime : suggestedJoin;
+      const leaveVal = participantData ? participantData.leaveTime : suggestedLeave;
       
       contentDiv.innerHTML = `
-        <label>Name: <input type="text" class="participantName" placeholder="Name"></label>
-        <label>Join Time: <input type="time" class="joinTime" value="${suggestedJoin}"></label>
-        <label>Leave Time: <input type="time" class="leaveTime" value="${suggestedLeave}"></label>
+        <label>Name: <input type="text" class="participantName" placeholder="Name" value="${nameVal}"></label>
+        <label>Join Time: <input type="time" class="joinTime" value="${joinVal}"></label>
+        <label>Leave Time: <input type="time" class="leaveTime" value="${leaveVal}"></label>
       `;
+      
+      contentDiv.querySelectorAll('input').forEach(input => {
+        input.addEventListener('change', saveParticipants);
+      });
+      
       div.appendChild(contentDiv);
       container.appendChild(div);
+      saveParticipants();
     }
     
-    // Global variable to store the formatted text version of the results.
+    // --- Calculation and Copy Functions ---
+    // Global variable to store the minimal formatted result text (only name and adjusted cost).
     let lastTextResult = "";
     
-    // Main calculation function.
+    // Calculate costs by computing the session period from the earliest join to the latest leave.
     function calculateCosts() {
       const resultsDiv = document.getElementById('results');
       resultsDiv.innerHTML = '';
       
-      const startTimeStr = document.getElementById('startTime').value;
-      const endTimeStr = document.getElementById('endTime').value;
-      const actualPaidStr = document.getElementById('actualPaid').value;
-      const actualPaid = parseFloat(actualPaidStr);
-      
-      if (!startTimeStr || !endTimeStr) {
-        resultsDiv.innerText = 'Please enter both a valid start time and end time.';
-        return;
-      }
-      
-      const [startHour, startMinute] = startTimeStr.split(':').map(Number);
-      const [endHour, endMinute] = endTimeStr.split(':').map(Number);
-      const sessionStartMinutes = startHour * 60 + startMinute;
-      const sessionEndMinutes = endHour * 60 + endMinute;
-      
-      const duration = sessionEndMinutes - sessionStartMinutes;
-      if (duration <= 0) {
-        resultsDiv.innerText = 'End time must be after the start time.';
-        return;
-      }
+      const actualPaid = parseFloat(document.getElementById('actualPaid').value);
       
       // Gather participant data.
       const participantElems = document.querySelectorAll('.participant');
       const participants = [];
+      const joinTimes = [];
+      const leaveTimes = [];
       participantElems.forEach(elem => {
         const name = elem.querySelector('.participantName').value.trim() || 'Unnamed';
-        const joinTimeStr = elem.querySelector('.joinTime').value;
-        const leaveTimeStr = elem.querySelector('.leaveTime').value;
-        if (!joinTimeStr || !leaveTimeStr) return;
-        
-        const [joinHour, joinMinute] = joinTimeStr.split(':').map(Number);
-        const [leaveHour, leaveMinute] = leaveTimeStr.split(':').map(Number);
-        const joinTimeMinutes = joinHour * 60 + joinMinute;
-        const leaveTimeMinutes = leaveHour * 60 + leaveMinute;
-        
-        const joinOffset = joinTimeMinutes - sessionStartMinutes;
-        const leaveOffset = leaveTimeMinutes - sessionStartMinutes;
-        
-        if (joinOffset < 0 || joinOffset >= duration || leaveOffset <= joinOffset || leaveOffset > duration) {
-          console.warn(`${name}'s join/leave times are invalid or outside the session and will be skipped.`);
-          return;
-        }
-        
-        participants.push({ name, joinOffset, leaveOffset, computedCost: 0, breakdown: [] });
+        const joinTime = elem.querySelector('.joinTime').value;
+        const leaveTime = elem.querySelector('.leaveTime').value;
+        if (!joinTime || !leaveTime) return;
+        joinTimes.push(timeToMinutes(joinTime));
+        leaveTimes.push(timeToMinutes(leaveTime));
+        participants.push({ name, joinTime, leaveTime, computedCost: 0, breakdown: [] });
       });
       
       if (participants.length === 0) {
@@ -315,22 +327,33 @@
         return;
       }
       
-      let computedSessionTotal = 0;
-      let textResult = "Results:\n\n";
+      const sessionStartMinutes = Math.min(...joinTimes);
+      const sessionEndMinutes = Math.max(...leaveTimes);
+      const duration = sessionEndMinutes - sessionStartMinutes;
+      if (duration <= 0) {
+        resultsDiv.innerText = 'Invalid time range among participants.';
+        return;
+      }
       
+      let computedSessionTotal = 0;
+      // Simulate minute-by-minute over the computed session.
       for (let minute = 0; minute < duration; minute++) {
         const currentTime = sessionStartMinutes + minute;
-        const activeParticipants = participants.filter(p => p.joinOffset <= minute && minute < p.leaveOffset);
+        const activeParticipants = participants.filter(p => {
+          const jt = timeToMinutes(p.joinTime);
+          const lt = timeToMinutes(p.leaveTime);
+          return jt <= currentTime && currentTime < lt;
+        });
         const activeCount = activeParticipants.length;
         if (activeCount === 0) continue;
-        
         const groupHourlyRate = getHourlyRate(activeCount, currentTime);
         const costForThisMinute = groupHourlyRate / 60;
         computedSessionTotal += costForThisMinute;
-        
         const costPerPerson = costForThisMinute / activeCount;
+        
         activeParticipants.forEach(p => {
           p.computedCost += costPerPerson;
+          // Group consecutive minutes with the same effective per-minute cost.
           if (p.breakdown.length > 0) {
             let last = p.breakdown[p.breakdown.length - 1];
             if (last.effectiveRate === costPerPerson && last.endMinute === minute) {
@@ -368,15 +391,13 @@
         p.adjustedCost = p.computedCost * factor;
       });
       
+      // Build detailed HTML result output (showing full breakdown).
       let html = '<ul>';
-      textResult += "Participant Costs:\n";
       participants.forEach(p => {
         html += `<li><strong>${p.name}</strong>:<br>
                  Computed Cost: $${p.computedCost.toFixed(2)}<br>
                  <strong>Adjusted Cost:</strong> $${p.adjustedCost.toFixed(2)}<br>
                  <em>Breakdown:</em><ul class="breakdown">`;
-        
-        textResult += `${p.name}:\n  Computed Cost: $${p.computedCost.toFixed(2)}\n  Adjusted Cost: $${p.adjustedCost.toFixed(2)}\n  Breakdown:\n`;
         p.breakdown.forEach(interval => {
           const intervalStart = formatTime(sessionStartMinutes + interval.startMinute);
           const intervalEnd = formatTime(sessionStartMinutes + interval.endMinute);
@@ -384,12 +405,8 @@
           html += `<li>From ${intervalStart} to ${intervalEnd} (${minutesSpent} minute${minutesSpent > 1 ? 's' : ''})<br>
                    Group rate: $${interval.groupHourlyRate}/hr with ${interval.activeCount} active<br>
                    Each paid $${interval.effectiveRate.toFixed(4)}/min → $${interval.cost.toFixed(2)}</li>`;
-          textResult += `    From ${intervalStart} to ${intervalEnd} (${minutesSpent} minute${minutesSpent > 1 ? 's' : ''})\n`;
-          textResult += `      Group rate: $${interval.groupHourlyRate}/hr with ${interval.activeCount} active\n`;
-          textResult += `      Each paid $${interval.effectiveRate.toFixed(4)}/min -> $${interval.cost.toFixed(2)}\n`;
         });
         html += '</ul></li>';
-        textResult += '\n';
       });
       html += '</ul>';
       
@@ -404,24 +421,83 @@
                  </ul>
                </div>`;
       
-      textResult += `Summary:\n  Computed Session Total: $${computedSessionTotal.toFixed(2)}\n  Actual Total Paid: ${!isNaN(actualPaid) && actualPaid > 0 ? '$' + actualPaid.toFixed(2) : 'Not provided (using computed total)'}\n  Adjustment Factor: ${factor.toFixed(4)}\n  Sum of Adjusted Participant Costs: $${participants.reduce((s, p) => s + p.adjustedCost, 0).toFixed(2)}\n`;
-      
       resultsDiv.innerHTML = html;
-      lastTextResult = textResult;
+      
+      // Build minimal text result (only name and adjusted cost) for copying.
+      let copyTextResult = "Participant Costs:\n\n";
+      participants.forEach(p => {
+        copyTextResult += `${p.name}: $${p.adjustedCost.toFixed(2)}\n`;
+      });
+      lastTextResult = copyTextResult;
+      
+      saveParticipants();
     }
     
-    // Copies the formatted result text to the clipboard.
+    // Copies the minimal formatted result text to the clipboard.
     function copyResults() {
       if (!lastTextResult) {
         alert("No results available to copy. Please calculate the results first.");
         return;
       }
       navigator.clipboard.writeText(lastTextResult).then(() => {
-        alert("Formatted results copied to clipboard!");
+        alert("Participant names and costs copied to clipboard!");
       }).catch(err => {
         alert("Failed to copy results: " + err);
       });
     }
+    
+    // --- NFC Tag Integration via URL Query Parameter ---
+    // If the URL contains a "name" parameter (e.g. ?name=Alice), then:
+    // - If a participant with that name exists, update their leave time to the current time.
+    // - Otherwise, add a new participant with that name and set the join time to current time.
+    // If the URL contains "new" (and no "name"), prompt for a name.
+    function processNfcScan() {
+      const params = new URLSearchParams(window.location.search);
+      let scannedName = params.get("name");
+      if (!scannedName && params.has("new")) {
+        scannedName = prompt("Enter your name:");
+      }
+      if (scannedName) {
+        const currentTime = getCurrentLocalTime();
+        const participantElems = document.querySelectorAll('.participant');
+        let found = false;
+        participantElems.forEach(elem => {
+          const nameInput = elem.querySelector('.participantName');
+          if (nameInput && nameInput.value.trim().toLowerCase() === scannedName.trim().toLowerCase()) {
+            // Update leave time if current time is later.
+            const leaveInput = elem.querySelector('.leaveTime');
+            if (!leaveInput.value || leaveInput.value < currentTime) {
+              leaveInput.value = currentTime;
+              alert(`Logged leave time for ${scannedName} at ${currentTime}`);
+            } else {
+              alert(`Participant ${scannedName} already has a leave time set.`);
+            }
+            found = true;
+          }
+        });
+        if (!found) {
+          addParticipant({ name: scannedName, joinTime: getCurrentLocalTime(), leaveTime: "" });
+          alert(`Logged join time for ${scannedName} at ${getCurrentLocalTime()}`);
+        }
+        saveParticipants();
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+    
+    // --- Clear Data Function ---
+    function clearData() {
+      if (confirm("Are you sure you want to clear all participant data?")) {
+        localStorage.removeItem("participants");
+        document.getElementById('participants').innerHTML = "";
+        document.getElementById('results').innerHTML = "";
+        alert("All data cleared!");
+      }
+    }
+    
+    window.addEventListener('load', () => {
+      loadParticipants();
+      processNfcScan();
+    });
   </script>
 </body>
 </html>
