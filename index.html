@@ -5,10 +5,10 @@
   <!-- Ensure proper scaling on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Music Tunnel Cost Calculator</title>
-  <!-- Font Awesome CDN for icons (integrity attribute removed) -->
+  <!-- Font Awesome CDN for icons (integrity removed) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
   <style>
-    /* Global button style for consistent sizing */
+    /* Global button style for consistent sizing, no borders */
     button {
       box-sizing: border-box;
       padding: 10px 20px;
@@ -121,7 +121,7 @@
     #copyResultsInline:hover {
       background: #218838;
     }
-    /* Floating Copy Results Button, initially hidden */
+    /* Floating Copy Results Button */
     #copyResultsFloating {
       position: absolute;
       top: 20px;
@@ -154,12 +154,7 @@
       background: #c82333;
     }
     a.spare-link {
-      color: #007bff;
-      text-decoration: none;
-      font-weight: bold;
-    }
-    a.spare-link:hover {
-      text-decoration: underline;
+      display: none; /* Removed spare NFC link from UI */
     }
     @media (max-width: 600px) {
       body {
@@ -201,13 +196,12 @@
     
     <h2>Participants</h2>
     <p>
-      Enter each participant’s join and leave time below (or scan an NFC tag with a URL like <code>?name=Alice</code>).<br>
-      For spare/new/random people, use this link:
-      <a class="spare-link" href="?new=1">Spare NFC Link</a>
+      Enter each participant’s join and leave time below.
     </p>
     <div id="participants"></div>
     <div id="participantActions">
-      <button onclick="addParticipant()"><i class="fas fa-plus"></i> Add Participant</button>
+      <!-- When clicked, this button will prompt for a name and then update or add accordingly -->
+      <button onclick="addParticipantFromButton()"><i class="fas fa-plus"></i> Add Participant</button>
       <button id="clearDataBtn" onclick="clearData()"><i class="fas fa-trash"></i> Clear Data</button>
     </div>
     
@@ -343,6 +337,34 @@
       
       div.appendChild(contentDiv);
       container.appendChild(div);
+      saveParticipants();
+    }
+    
+    // New function: replicate spare NFC link behavior on Add Participant button.
+    function addParticipantFromButton() {
+      const name = prompt("Enter your name:");
+      if (!name) return;
+      const currentTime = getCurrentLocalTime();
+      const participantElems = document.querySelectorAll('.participant');
+      let found = false;
+      participantElems.forEach(elem => {
+        const nameInput = elem.querySelector('.participantName');
+        if (nameInput && nameInput.value.trim().toLowerCase() === name.trim().toLowerCase()) {
+          // If participant exists, update leave time if needed.
+          const leaveInput = elem.querySelector('.leaveTime');
+          if (!leaveInput.value || leaveInput.value < currentTime) {
+            leaveInput.value = currentTime;
+            showNotification(`Logged leave time for ${name} at ${currentTime}`);
+          } else {
+            showNotification(`Participant ${name} already has a leave time set.`);
+          }
+          found = true;
+        }
+      });
+      if (!found) {
+        addParticipant({ name: name, joinTime: currentTime, leaveTime: "" });
+        showNotification(`Logged join time for ${name} at ${currentTime}`);
+      }
       saveParticipants();
     }
     
@@ -544,7 +566,6 @@
       const floatingCopy = document.getElementById('copyResultsFloating');
       
       container.addEventListener('scroll', () => {
-        // Show floating copy button only if the bottom of resultHeader is above the container's scrollTop
         if (container.scrollTop > (resultHeader.offsetTop + resultHeader.offsetHeight)) {
           floatingCopy.style.display = 'block';
         } else {
