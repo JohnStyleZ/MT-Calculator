@@ -106,7 +106,7 @@
       border-radius: 4px;
       font-size: 16px;
     }
-    /* Session Actions container (new toggle button) */
+    /* Session Actions container with toggle button */
     #sessionActions {
       display: flex;
       gap: 10px;
@@ -200,7 +200,7 @@
   <div class="container">
     <h1>Music Tunnel Cost Calculator</h1>
     
-    <!-- Session Toggle Button (Start/End) -->
+    <!-- Session Toggle Button -->
     <div id="sessionActions">
       <button id="sessionToggleBtn" onclick="toggleSession()">
         <i class="fas fa-play"></i> Start Session
@@ -217,7 +217,6 @@
     <p>Enter each participant’s join and leave time below.</p>
     <div id="participants"></div>
     <div id="participantActions">
-      <!-- The Add Participant button now mimics NFC behavior -->
       <button onclick="addParticipantFromButton()">
         <i class="fas fa-plus"></i> Add Participant
       </button>
@@ -250,7 +249,7 @@
     <div id="results"></div>
   </div>
   
-  <!-- Floating copy button -->
+  <!-- Floating Copy Button -->
   <button id="copyResultsFloating" onclick="copyResults()">
     <i class="fas fa-copy"></i> Copy Results
   </button>
@@ -296,7 +295,6 @@
     function toggleSession() {
       const btn = document.getElementById("sessionToggleBtn");
       if (!sessionStartTime) {
-        // Not started yet → start session
         if (confirm("Are you sure you want to start the session?")) {
           sessionStartTime = getCurrentLocalTime();
           const startMins = timeToMinutes(sessionStartTime);
@@ -308,22 +306,22 @@
               joinInput.value = sessionStartTime;
             }
           });
-          showNotification(`Session started at ${sessionStartTime}. Join times updated for those within 10 minutes.`);
+          showNotification(`Session started at ${sessionStartTime}.`);
           btn.innerHTML = '<i class="fas fa-stop"></i> End Session';
           btn.style.background = '#dc3545'; // red
         }
       } else if (!sessionEndTime) {
-        // Session in progress → end session
         if (confirm("Are you sure you want to end the session?")) {
           sessionEndTime = getCurrentLocalTime();
           const participantElems = document.querySelectorAll('.participant');
           participantElems.forEach(elem => {
             const leaveInput = elem.querySelector('.leaveTime');
-            if (!leaveInput.value || leaveInput.value < sessionEndTime) {
+            // Only update if leave time is empty
+            if (!leaveInput.value) {
               leaveInput.value = sessionEndTime;
             }
           });
-          showNotification(`Session ended at ${sessionEndTime}. Missing leave times updated.`);
+          showNotification(`Session ended at ${sessionEndTime}.`);
           btn.innerHTML = '<i class="fas fa-check"></i> Session Ended';
           btn.style.background = '#6c757d'; // gray
           btn.disabled = true;
@@ -375,6 +373,31 @@
           participants.forEach(p => {
             addParticipant(p);
           });
+          // Auto-detect session status on import:
+          const hasEmptyLeave = participants.some(p => !p.leaveTime);
+          const sessionBtn = document.getElementById("sessionToggleBtn");
+          if (hasEmptyLeave) {
+            sessionStartTime = participants.reduce((min, p) => {
+              let jt = timeToMinutes(p.joinTime);
+              return jt < min ? jt : min;
+            }, Infinity);
+            sessionEndTime = null;
+            sessionBtn.innerHTML = '<i class="fas fa-stop"></i> End Session';
+            sessionBtn.style.background = '#dc3545';
+            sessionBtn.disabled = false;
+          } else {
+            sessionStartTime = participants.reduce((min, p) => {
+              let jt = timeToMinutes(p.joinTime);
+              return jt < min ? jt : min;
+            }, Infinity);
+            sessionEndTime = participants.reduce((max, p) => {
+              let lt = timeToMinutes(p.leaveTime);
+              return lt > max ? lt : max;
+            }, 0);
+            sessionBtn.innerHTML = '<i class="fas fa-check"></i> Session Ended';
+            sessionBtn.style.background = '#6c757d';
+            sessionBtn.disabled = true;
+          }
         } catch (e) {
           console.error("Error parsing participant data", e);
         }
@@ -431,7 +454,7 @@
         const nameInput = elem.querySelector('.participantName');
         if (nameInput && nameInput.value.trim().toLowerCase() === name.trim().toLowerCase()) {
           const leaveInput = elem.querySelector('.leaveTime');
-          if (!leaveInput.value || leaveInput.value < currentTime) {
+          if (!leaveInput.value) {
             leaveInput.value = currentTime;
             showNotification(`Logged leave time for ${name} at ${currentTime}`);
           } else {
@@ -461,7 +484,7 @@
       const data = prompt("Paste the exported data:");
       if (!data) return;
       try {
-        JSON.parse(data);
+        JSON.parse(data); // Validate JSON
         localStorage.setItem("participants", data);
         document.getElementById("participants").innerHTML = "";
         loadParticipants();
@@ -649,27 +672,21 @@
       }
     }
     
-    // --- Export and Import Functions ---
-    function exportData() {
-      const data = localStorage.getItem("participants");
-      if (!data) {
-        alert("No data to export.");
-      } else {
-        prompt("Copy the exported data:", data);
-      }
-    }
-    
-    function importData() {
-      const data = prompt("Paste the exported data:");
-      if (!data) return;
-      try {
-        JSON.parse(data); // Validate JSON
-        localStorage.setItem("participants", data);
-        document.getElementById("participants").innerHTML = "";
-        loadParticipants();
-        showNotification("Data imported successfully.");
-      } catch (e) {
-        alert("Invalid data format. Please check and try again.");
+    // --- Clear Data Function ---
+    function clearData() {
+      console.log("clearData called");
+      if (confirm("Are you sure you want to clear all participant data?")) {
+        localStorage.removeItem("participants");
+        document.getElementById('participants').innerHTML = "";
+        document.getElementById('results').innerHTML = "";
+        // Reset session variables and toggle button
+        sessionStartTime = null;
+        sessionEndTime = null;
+        const sessionBtn = document.getElementById("sessionToggleBtn");
+        sessionBtn.innerHTML = '<i class="fas fa-play"></i> Start Session';
+        sessionBtn.style.background = "";
+        sessionBtn.disabled = false;
+        showNotification("All data cleared!");
       }
     }
     
