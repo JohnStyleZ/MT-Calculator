@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <!-- Ensure proper scaling on mobile -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Music Tunnel Cost Calculator</title>
-  <!-- Font Awesome CDN for icons (integrity removed) -->
+  <!-- Font Awesome CDN for icons (integrity attribute removed) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
   <style>
     /* Global button style for consistent sizing, no borders */
@@ -106,6 +106,12 @@
       border-radius: 4px;
       font-size: 16px;
     }
+    /* Session Actions container (new toggle button) */
+    #sessionActions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
     /* Results Header */
     #resultHeader {
       display: flex;
@@ -145,6 +151,12 @@
       align-items: center;
       margin-bottom: 10px;
     }
+    /* Data Actions container for export/import */
+    #dataActions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
     /* Clear Data Button styled in red */
     #clearDataBtn {
       background: #dc3545;
@@ -154,7 +166,7 @@
       background: #c82333;
     }
     a.spare-link {
-      display: none; /* Removed spare NFC link from UI */
+      display: none;
     }
     @media (max-width: 600px) {
       body {
@@ -188,6 +200,13 @@
   <div class="container">
     <h1>Music Tunnel Cost Calculator</h1>
     
+    <!-- Session Toggle Button (Start/End) -->
+    <div id="sessionActions">
+      <button id="sessionToggleBtn" onclick="toggleSession()">
+        <i class="fas fa-play"></i> Start Session
+      </button>
+    </div>
+    
     <!-- Only asking for Actual Total Paid -->
     <div>
       <label for="actualPaid">Actual Total Paid ($):</label>
@@ -195,30 +214,52 @@
     </div>
     
     <h2>Participants</h2>
-    <p>
-      Enter each participant’s join and leave time below.
-    </p>
+    <p>Enter each participant’s join and leave time below.</p>
     <div id="participants"></div>
     <div id="participantActions">
-      <!-- When clicked, this button will prompt for a name and then update or add accordingly -->
-      <button onclick="addParticipantFromButton()"><i class="fas fa-plus"></i> Add Participant</button>
-      <button id="clearDataBtn" onclick="clearData()"><i class="fas fa-trash"></i> Clear Data</button>
+      <!-- The Add Participant button now mimics NFC behavior -->
+      <button onclick="addParticipantFromButton()">
+        <i class="fas fa-plus"></i> Add Participant
+      </button>
+      <button id="clearDataBtn" onclick="clearData()">
+        <i class="fas fa-trash"></i> Clear Data
+      </button>
+    </div>
+    
+    <!-- Data Actions: Export/Import -->
+    <div id="dataActions">
+      <button onclick="exportData()">
+        <i class="fas fa-download"></i> Export Data
+      </button>
+      <button onclick="importData()">
+        <i class="fas fa-upload"></i> Import Data
+      </button>
     </div>
     
     <br>
-    <button onclick="calculateCosts()"><i class="fas fa-calculator"></i> Calculate Costs</button>
+    <button onclick="calculateCosts()">
+      <i class="fas fa-calculator"></i> Calculate Costs
+    </button>
     
     <div id="resultHeader">
       <h2 style="margin: 0;">Results</h2>
-      <button id="copyResultsInline" onclick="copyResults()"><i class="fas fa-copy"></i> Copy Results</button>
+      <button id="copyResultsInline" onclick="copyResults()">
+        <i class="fas fa-copy"></i> Copy Results
+      </button>
     </div>
     <div id="results"></div>
   </div>
   
   <!-- Floating copy button -->
-  <button id="copyResultsFloating" onclick="copyResults()"><i class="fas fa-copy"></i> Copy Results</button>
+  <button id="copyResultsFloating" onclick="copyResults()">
+    <i class="fas fa-copy"></i> Copy Results
+  </button>
   
   <script>
+    // Global session variables
+    let sessionStartTime = null;
+    let sessionEndTime = null;
+    
     // --- Utility Functions ---
     function pad(num) {
       return num.toString().padStart(2, '0');
@@ -248,7 +289,46 @@
       document.body.appendChild(notif);
       setTimeout(() => {
         notif.remove();
-      }, 3000); // 3 seconds
+      }, 3000);
+    }
+    
+    // --- Session Toggle Function ---
+    function toggleSession() {
+      const btn = document.getElementById("sessionToggleBtn");
+      if (!sessionStartTime) {
+        // Not started yet → start session
+        if (confirm("Are you sure you want to start the session?")) {
+          sessionStartTime = getCurrentLocalTime();
+          const startMins = timeToMinutes(sessionStartTime);
+          const participantElems = document.querySelectorAll('.participant');
+          participantElems.forEach(elem => {
+            const joinInput = elem.querySelector('.joinTime');
+            const joinMins = timeToMinutes(joinInput.value);
+            if (Math.abs(joinMins - startMins) <= 10) {
+              joinInput.value = sessionStartTime;
+            }
+          });
+          showNotification(`Session started at ${sessionStartTime}. Join times updated for those within 10 minutes.`);
+          btn.innerHTML = '<i class="fas fa-stop"></i> End Session';
+          btn.style.background = '#dc3545'; // red
+        }
+      } else if (!sessionEndTime) {
+        // Session in progress → end session
+        if (confirm("Are you sure you want to end the session?")) {
+          sessionEndTime = getCurrentLocalTime();
+          const participantElems = document.querySelectorAll('.participant');
+          participantElems.forEach(elem => {
+            const leaveInput = elem.querySelector('.leaveTime');
+            if (!leaveInput.value || leaveInput.value < sessionEndTime) {
+              leaveInput.value = sessionEndTime;
+            }
+          });
+          showNotification(`Session ended at ${sessionEndTime}. Missing leave times updated.`);
+          btn.innerHTML = '<i class="fas fa-check"></i> Session Ended';
+          btn.style.background = '#6c757d'; // gray
+          btn.disabled = true;
+        }
+      }
     }
     
     // --- Global Cost Function ---
@@ -340,7 +420,7 @@
       saveParticipants();
     }
     
-    // New function: replicate spare NFC link behavior on Add Participant button.
+    // New function: Replicate spare NFC link behavior on Add Participant button.
     function addParticipantFromButton() {
       const name = prompt("Enter your name:");
       if (!name) return;
@@ -350,7 +430,6 @@
       participantElems.forEach(elem => {
         const nameInput = elem.querySelector('.participantName');
         if (nameInput && nameInput.value.trim().toLowerCase() === name.trim().toLowerCase()) {
-          // If participant exists, update leave time if needed.
           const leaveInput = elem.querySelector('.leaveTime');
           if (!leaveInput.value || leaveInput.value < currentTime) {
             leaveInput.value = currentTime;
@@ -366,6 +445,30 @@
         showNotification(`Logged join time for ${name} at ${currentTime}`);
       }
       saveParticipants();
+    }
+    
+    // --- Export and Import Functions ---
+    function exportData() {
+      const data = localStorage.getItem("participants");
+      if (!data) {
+        alert("No data to export.");
+      } else {
+        prompt("Copy the exported data:", data);
+      }
+    }
+    
+    function importData() {
+      const data = prompt("Paste the exported data:");
+      if (!data) return;
+      try {
+        JSON.parse(data);
+        localStorage.setItem("participants", data);
+        document.getElementById("participants").innerHTML = "";
+        loadParticipants();
+        showNotification("Data imported successfully.");
+      } catch (e) {
+        alert("Invalid data format. Please check and try again.");
+      }
     }
     
     // --- Calculation and Copy Functions ---
@@ -546,13 +649,27 @@
       }
     }
     
-    // --- Clear Data Function ---
-    function clearData() {
-      if (confirm("Are you sure you want to clear all participant data?")) {
-        localStorage.removeItem("participants");
-        document.getElementById('participants').innerHTML = "";
-        document.getElementById('results').innerHTML = "";
-        showNotification("All data cleared!");
+    // --- Export and Import Functions ---
+    function exportData() {
+      const data = localStorage.getItem("participants");
+      if (!data) {
+        alert("No data to export.");
+      } else {
+        prompt("Copy the exported data:", data);
+      }
+    }
+    
+    function importData() {
+      const data = prompt("Paste the exported data:");
+      if (!data) return;
+      try {
+        JSON.parse(data); // Validate JSON
+        localStorage.setItem("participants", data);
+        document.getElementById("participants").innerHTML = "";
+        loadParticipants();
+        showNotification("Data imported successfully.");
+      } catch (e) {
+        alert("Invalid data format. Please check and try again.");
       }
     }
     
